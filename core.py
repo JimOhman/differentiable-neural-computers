@@ -133,7 +133,9 @@ class CosineWeights(nn.Module):
 
 class Memory(nn.Module):
 
-  def __init__(self, batch_size, input_dim, capacity, memory_dim, num_reads=1, num_writes=1):
+  def __init__(self, batch_size, input_dim, capacity, memory_dim, num_reads=1,
+                                                                  num_writes=1,
+                                                                  free_strengths=False):
     super(Memory, self).__init__()
     self.batch_size = batch_size
     self.capacity = capacity
@@ -141,6 +143,7 @@ class Memory(nn.Module):
     self.num_writes = num_writes
     self.num_reads = num_reads
     self.num_read_modes = 1 + 2 * self.num_writes
+    self.strengths_dim = capacity if free_strengths else 1
 
     memories = torch.ones((batch_size, capacity, memory_dim))
     write_weights = torch.zeros(batch_size, num_writes, capacity)
@@ -166,14 +169,14 @@ class Memory(nn.Module):
     self.softmax = nn.Softmax(dim=-1)
    
     self.write_keys = nn.Linear(input_dim, num_writes * memory_dim)
-    self.write_strengths = nn.Linear(input_dim, num_writes * capacity)
+    self.write_strengths = nn.Linear(input_dim, num_writes * self.strengths_dim)
     self.write_strengths.bias.data.fill_(1)
 
     self.read_keys = nn.Linear(input_dim, num_reads * memory_dim)
-    self.read_strengths = nn.Linear(input_dim, num_reads * capacity)
+    self.read_strengths = nn.Linear(input_dim, num_reads * self.strengths_dim)
     self.read_strengths.bias.data.fill_(1)
 
-    self.allocation_strengths = nn.Linear(input_dim, capacity)
+    self.allocation_strengths = nn.Linear(input_dim, self.strengths_dim)
     self.allocation_strengths.bias.data.fill_(1)
 
     self.read_mask = nn.Linear(input_dim, num_reads * memory_dim)
@@ -181,9 +184,9 @@ class Memory(nn.Module):
     self.write_mask = nn.Linear(input_dim, num_writes * memory_dim)
     self.write_mask.bias.data.fill_(1)
 
-    self.backward_strengths = nn.Linear(input_dim, num_writes * num_reads * capacity)
+    self.backward_strengths = nn.Linear(input_dim, num_writes * num_reads * self.strengths_dim)
     self.backward_strengths.bias.data.fill_(1)
-    self.forward_strengths = nn.Linear(input_dim, num_writes * num_reads * capacity)
+    self.forward_strengths = nn.Linear(input_dim, num_writes * num_reads * self.strengths_dim)
     self.forward_strengths.bias.data.fill_(1)
 
     self.gates = {'write_gate': None,
@@ -214,12 +217,12 @@ class Memory(nn.Module):
     write_keys = self.write_keys(inputs)
     write_keys = write_keys.view(-1, self.num_writes, self.memory_dim)
     write_strengths = self.write_strengths(inputs)
-    write_strengths = write_strengths.view(-1, self.num_writes, self.capacity)
+    write_strengths = write_strengths.view(-1, self.num_writes, self.strengths_dim)
 
     read_keys = self.read_keys(inputs)
     read_keys = read_keys.view(-1, self.num_reads, self.memory_dim)
     read_strengths = self.read_strengths(inputs)
-    read_strengths = read_strengths.view(-1, self.num_reads, self.capacity)
+    read_strengths = read_strengths.view(-1, self.num_reads, self.strengths_dim)
 
     allocation_strengths = self.allocation_strengths(inputs)
 
@@ -229,9 +232,9 @@ class Memory(nn.Module):
     write_mask = write_mask.view(-1, self.num_writes, self.memory_dim)
 
     backward_strengths = self.backward_strengths(inputs)
-    backward_strengths = backward_strengths.view(-1, self.num_writes, self.num_reads, self.capacity)
+    backward_strengths = backward_strengths.view(-1, self.num_writes, self.num_reads, self.strengths_dim)
     forward_strengths = self.forward_strengths(inputs)
-    forward_strengths = forward_strengths.view(-1, self.num_writes, self.num_reads, self.capacity)
+    forward_strengths = forward_strengths.view(-1, self.num_writes, self.num_reads, self.strengths_dim)
 
     result = {'read_content_keys': read_keys,
               'read_content_strengths': read_strengths,
@@ -284,8 +287,6 @@ class Memory(nn.Module):
     forward_weights = self.linkage.directional_read_weights(self.read_weights, forward=True,
                                                             strengths=inputs['forward_strengths'])
 
-    
-    # use narrow instead of slice? or split? or unfold?
     backward_mode = inputs['read_mode'][..., :self.num_writes]
     forward_mode = inputs['read_mode'][..., self.num_writes:2*self.num_writes]
     content_mode = inputs['read_mode'][..., 2*self.num_writes]
@@ -334,7 +335,8 @@ class Controller(nn.Module):
                          args.capacity, 
                          args.memory_dim, 
                          args.num_reads, 
-                         args.num_writes)
+                         args.num_writes,
+                         args.free_strengths)
 
     self.fc = nn.Linear(args.num_reads*args.memory_dim, args.output_dim)
 

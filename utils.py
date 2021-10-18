@@ -4,8 +4,10 @@ import torch.nn.functional as F
 from torch.optim import Adam, SGD, RMSprop, AdamW
 from torch.nn.utils.rnn import pad_sequence
 import numpy as np
+from datetime import datetime
 import random
 import json
+import pytz
 import os
 
 
@@ -97,7 +99,7 @@ def make_dirs(args):
   dirs = {}
   if not args.run_tag:
     tz = pytz.timezone(args.time_zone)
-    args.run_tag = datetime.datetime.now(tz=tz).strftime("%d-%b-%Y_%H-%M-%S")
+    args.run_tag = datetime.now(tz=tz).strftime("%d-%b-%Y_%H-%M-%S")
   if args.group_tag:
     base_path = os.path.join('runs', args.group_tag, args.run_tag)
   else:
@@ -113,10 +115,6 @@ def make_dirs(args):
   if not os.path.isfile(path):
     json.dump(vars(args), open(path, 'w'), indent=2)
   return dirs
-
-def sigmoid_cross_entropy_with_logits(logits, target_policy):
-  loss = (F.relu(logits) - logits * target_policy + torch.log(1 + torch.exp(-logits.abs())))
-  return loss
 
 def get_accuracy(output, target):
   accuracy = (torch.round(output) == target).sum(-1) / target.shape[-1]
@@ -137,9 +135,11 @@ def get_optimizer(controller, args):
   if args.optimizer == 'Adam':
     optimizer = Adam(controller.parameters(), lr=args.lr)
   elif args.optimizer == 'SGD':
-    optimizer = SGD(controller.parameters(), lr=args.lr, momentum=args.momentum)
+    parameters = add_weight_decay(controller, args.weight_decay)
+    optimizer = SGD(parameters, lr=args.lr, momentum=args.momentum)
   elif args.optimizer == 'RMSprop':
-    optimizer = RMSprop(controller.parameters(), lr=args.lr, momentum=args.momentum)
+    parameters = add_weight_decay(controller, args.weight_decay)
+    optimizer = RMSprop(parameters, lr=args.lr, momentum=args.momentum)
   elif args.optimizer == 'AdamW':
     parameters = add_weight_decay(controller, args.weight_decay)
     optimizer = AdamW(parameters, lr=args.lr)
@@ -148,9 +148,7 @@ def get_optimizer(controller, args):
   return optimizer
 
 def get_loss_function(args):
-  if args.loss_function == 'SCEL':
-    loss_function = sigmoid_cross_entropy_with_logits
-  elif args.loss_function == 'MSE':
+  if args.loss_function == 'MSE':
     loss_function = nn.MSELoss(reduction='none')
   else:
     raise NotImplementedError

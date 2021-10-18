@@ -1,0 +1,6 @@
+pytz==2021.1
+torch==1.9.0+cu111
+tqdm==4.62.2
+matplotlib==3.4.3
+numpy==1.19.5
+tensorboard

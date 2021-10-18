@@ -74,7 +74,7 @@ def update_figure(inputs, targets, outputs, mask, images, memory_state, args):
   images['write_weights'].set_data(write_weights)
   images['read_weights'].set_data(read_weights)
 
-def visualize(args):
+def visualize_training(args):
   states = []
   all_nets = os.listdir(args.saves_dir)
   filtered_nets = [net for net in all_nets if (args.start_net <= int(net) <= args.end_net)]
@@ -163,27 +163,53 @@ if __name__ == '__main__':
   import argparse
 
   parser = argparse.ArgumentParser()
-  parser.add_argument('--saves_dir', type=str, default='')
-  parser.add_argument('--net', type=int, default=None)
-  parser.add_argument('--skip', type=int, default=0)
-  parser.add_argument('--seed', type=int, default=0)
-  parser.add_argument('--batch_size', type=int, default=1)
-  parser.add_argument('--num_patterns', type=int, default=None)
-  parser.add_argument('--min_pattern_length', type=int, default=None)
-  parser.add_argument('--max_pattern_length', type=int, default=None)
-  parser.add_argument('--min_repeats', type=int, default=None)
-  parser.add_argument('--max_repeats', type=int, default=None)
-  parser.add_argument('--num_sequences', type=int, default=None)
-  parser.add_argument('--ignore_mask', action='store_true')
-  parser.add_argument('--visualize', action='store_true')
-  parser.add_argument('--save_as_gifs', action='store_true')
-  parser.add_argument('--start_net', type=int, default=0)
-  parser.add_argument('--end_net', type=int, default=np.inf)
-  parser.add_argument('--round', action='store_true')
-  parser.add_argument('--sleep', type=int, default=0)
-  parser.add_argument('--figsize', nargs=2, type=int, default=None)
-  parser.add_argument('--minimize', action='store_true')
-  parser.add_argument('--gpu', action='store_true')
+  test = parser.add_argument_group('test')
+  test.add_argument('--saves_dir', type=str, default='',
+      help='The directory where the models are saved.')
+  test.add_argument('--net', type=int, default=None,
+      help='The filename for the saved model if not --visualize.')
+  test.add_argument('--seed', type=int, default=0,
+      help='The seed for the data loader.')
+  test.add_argument('--batch_size', type=int, default=1,
+      help='The amount of sequences per batch.')
+  test.add_argument('--gpu', action='store_true',
+      help='Run on default GPU if not --visualize.')
+
+  patterns = parser.add_argument_group('patterns')
+  patterns.add_argument('--num_sequences', type=int, default=None,
+      help='Amount of sequences in the dataset.')
+  patterns.add_argument('--min_pattern_length', type=int, default=None,
+      help='Amount of sequences in the dataset.')
+  patterns.add_argument('--max_pattern_length', type=int, default=None,
+      help='Min length of a pattern.')
+  patterns.add_argument('--num_patterns', type=int, default=None,
+      help='Max length of a pattern.')
+  patterns.add_argument('--min_repeats', type=int, default=None,
+      help='Min amount of repeats for each pattern.')
+  patterns.add_argument('--max_repeats', type=int, default=None,
+      help='Max amount of repeats for each pattern.')
+
+  visualize = parser.add_argument_group('visualize')
+  visualize.add_argument('--visualize', action='store_true',
+      help='Specify to visualize the training process.')
+  visualize.add_argument('--ignore_mask', action='store_true',
+      help='Ignore mask in visualization if used during training.')
+  visualize.add_argument('--save_as_gifs', action='store_true',
+      help='Save the visualization as a gif.')
+  visualize.add_argument('--start_net', type=int, default=0,
+      help='Start visualization from this training step.')
+  visualize.add_argument('--end_net', type=int, default=np.inf,
+      help='End visualization at this training step.')
+  visualize.add_argument('--skip', type=int, default=0,
+      help='Skip this amount of saved models during visualization.')
+  visualize.add_argument('--round', action='store_true',
+      help='Round the output of the network during visualization.')
+  visualize.add_argument('--sleep', type=int, default=0,
+      help='Sleep this amount in milliseconds with each step.')
+  visualize.add_argument('--figsize', nargs=2, type=int, default=None,
+      help='Specify the figure size.')
+  visualize.add_argument('--minimize', action='store_true',
+      help='Remove padding for visualization.')
   args = parser.parse_args()
 
   assert args.start_net <= args.end_net
@@ -192,7 +218,8 @@ if __name__ == '__main__':
     args.end_net = args.net
 
   if not args.visualize:
-    state = torch.load(args.saves_dir + str(args.net), map_location=torch.device('cpu'))
+    path = os.path.join(args.saves_dir, str(args.net))
+    state = torch.load(path, map_location=torch.device('cpu'))
     state = insert_args(args, state)
     
     controller = Controller(state['args'])
@@ -225,5 +252,5 @@ if __name__ == '__main__':
         
         print('loss: {}, accuracy: {}%'.format(round(loss, 4), round(accuracy, 1)))
   else:
-    visualize(args)
+    visualize_training(args)
 
