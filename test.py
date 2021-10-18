@@ -79,7 +79,8 @@ def visualize(args):
   all_nets = os.listdir(args.saves_dir)
   filtered_nets = [net for net in all_nets if (args.start_net <= int(net) <= args.end_net)]
   for net in sorted(filtered_nets, key=int)[::args.skip+1]:
-    state = torch.load(args.saves_dir + net, map_location=torch.device('cpu'))
+    path = os.path.join(args.saves_dir, net)
+    state = torch.load(path, map_location=torch.device('cpu'))
     state = insert_args(args, state)
     states.append(state)
 
@@ -94,6 +95,7 @@ def visualize(args):
   dataset = torch.utils.data.DataLoader(dataset, **loader_params)
 
   with torch.inference_mode():
+    batch_idx = 0
     for inputs, targets, mask in dataset:
       if args.minimize:
         _, time_steps = torch.nonzero(mask, as_tuple=True)
@@ -124,8 +126,15 @@ def visualize(args):
                           'interval': args.sleep,
                           'blit': True,
                           'repeat': True}
-      _ = animation.FuncAnimation(fig, animate, **animation_params)
+      anim = animation.FuncAnimation(fig, animate, **animation_params)
       plt.show()
+
+      if args.save_as_gifs:
+        gifs_folder = os.path.join(os.path.split(args.saves_dir)[0], 'gifs')
+        gif_path = os.path.join(gifs_folder, '{}.gif'.format(batch_idx))
+        os.makedirs(gifs_folder, exist_ok=True)
+        anim.save(gif_path, writer='imagemagick', fps=60)
+      batch_idx += 1
 
 def insert_args(args, state):
   if args.num_patterns is not None:
@@ -167,6 +176,7 @@ if __name__ == '__main__':
   parser.add_argument('--num_sequences', type=int, default=None)
   parser.add_argument('--ignore_mask', action='store_true')
   parser.add_argument('--visualize', action='store_true')
+  parser.add_argument('--save_as_gifs', action='store_true')
   parser.add_argument('--start_net', type=int, default=0)
   parser.add_argument('--end_net', type=int, default=np.inf)
   parser.add_argument('--round', action='store_true')
