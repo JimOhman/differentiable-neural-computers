@@ -21,7 +21,7 @@ pip install -r requirements.txt
 ## Reproduce example:
 
 ```bash
-python train.py --data_seed 12 --seed 12 --autoclip --batch_size 256 --pattern_width 9 --max_repeats 2 --num_patterns 3 --input_dim 9 --output_dim 9 --use_mask
+python train.py --data_seed 12 --seed 12 --autoclip --batch_size 256 --pattern_width 9 --max_repeats 2 --num_patterns 3 --input_dim 9 --output_dim 9 --use_mask --free_strengths
 ```
 
 See training results with tensorboard:
