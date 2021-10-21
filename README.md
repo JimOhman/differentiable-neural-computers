@@ -1,7 +1,7 @@
 # Differentiable Neural Computers
  A Pytorch implementation of the [Differentiable Neural Computer](https://deepmind.com/blog/article/differentiable-neural-computers).
 
-* [x] Improvements added from [paper A](https://home.ttic.edu/~klivescu/MLSLP2017/MLSLP2017_ben-ari.pdf) and [paper B](https://arxiv.org/pdf/1904.10278.pdf).
+* [x] Improvements added from this [paper](https://home.ttic.edu/~klivescu/MLSLP2017/MLSLP2017_ben-ari.pdf) and this [paper](https://arxiv.org/pdf/1904.10278.pdf).
 * [x] Training results are logged with [Tensorboard](https://github.com/tensorflow/tensorboard).
 * [x] Evaluate and visualize saved models.
 * [x] Repeat-Copy task
