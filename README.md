@@ -2,10 +2,10 @@
  A Pytorch implementation of the [Differentiable Neural Computer](https://deepmind.com/blog/article/differentiable-neural-computers).
 
 * [x] Improvements added from this [paper](https://home.ttic.edu/~klivescu/MLSLP2017/MLSLP2017_ben-ari.pdf) and this [paper](https://arxiv.org/pdf/1904.10278.pdf).
-* [x] Training results are logged with [Tensorboard](https://github.com/tensorflow/tensorboard).
-* [x] Evaluate and visualize saved models.
-* [x] Repeat-Copy task
-* [ ] bAbI task
+* [x] Easy to evaluate and visualize saved models.
+* [x] See training results with [TensorBoard](https://github.com/tensorflow/tensorboard).
+* [x] Contains Repeat-Copy task
+* [ ] Contains bAbI task
  
  ## Repeat-Copy Example:
  
