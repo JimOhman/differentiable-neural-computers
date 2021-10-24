@@ -1,12 +1,9 @@
 from train import Trainer
-from core import Controller
-from utils import get_loss_function, get_optimizer, make_dirs, AutoClip
-from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
-import torch
-import os
-import ray
 import numpy as np
+import torch
+import ray
+import os
 
 
 @ray.remote
