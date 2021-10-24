@@ -1,11 +1,11 @@
 # Differentiable Neural Computers
  A Pytorch implementation of the [Differentiable Neural Computer](https://deepmind.com/blog/article/differentiable-neural-computers).
 
-* [x] Improvements added from [paper A](https://home.ttic.edu/~klivescu/MLSLP2017/MLSLP2017_ben-ari.pdf) and [paper B](https://arxiv.org/pdf/1904.10278.pdf).
-* [x] Training results are logged with [Tensorboard](https://github.com/tensorflow/tensorboard).
-* [x] Evaluate and visualize saved models.
-* [x] Repeat-Copy task
-* [ ] bAbI task
+* [x] Improvements added from this [paper](https://home.ttic.edu/~klivescu/MLSLP2017/MLSLP2017_ben-ari.pdf) and this [paper](https://arxiv.org/pdf/1904.10278.pdf).
+* [x] Easy to evaluate and visualize saved models.
+* [x] See training results with [TensorBoard](https://github.com/tensorflow/tensorboard).
+* [x] Contains Repeat-Copy task
+* [ ] Contains bAbI task
  
  ## Repeat-Copy Example:
  
@@ -21,7 +21,7 @@ pip install -r requirements.txt
 ## Reproduce example:
 
 ```bash
-python train.py --data_seed 12 --seed 12 --autoclip --batch_size 256 --pattern_width 9 --max_repeats 2 --num_patterns 3 --input_dim 9 --output_dim 9 --use_mask
+python train.py --data_seed 12 --seed 12 --autoclip --batch_size 256 --pattern_width 9 --max_repeats 2 --num_patterns 3 --input_dim 9 --output_dim 9 --use_mask --free_strengths
 ```
 
 See training results with tensorboard:
