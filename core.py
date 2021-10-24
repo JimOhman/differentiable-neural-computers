@@ -1,6 +1,7 @@
 import torch.nn.functional as F
 import torch.nn as nn
 import torch
+import numpy as np
 
 
 class TemporalLinkage(nn.Module):
@@ -70,7 +71,6 @@ class Freeness(nn.Module):
 
     self.softmax = nn.Softmax(dim=-1)
     self.strengths_op = nn.Softplus()
-    self.epsilon = 1e-6
 
   def reset(self, device):
     self.usage = torch.zeros(self.batch_size, self.capacity, device=device)
@@ -170,24 +170,16 @@ class Memory(nn.Module):
    
     self.write_keys = nn.Linear(input_dim, num_writes * memory_dim)
     self.write_strengths = nn.Linear(input_dim, num_writes * self.strengths_dim)
-    self.write_strengths.bias.data.fill_(1)
 
     self.read_keys = nn.Linear(input_dim, num_reads * memory_dim)
     self.read_strengths = nn.Linear(input_dim, num_reads * self.strengths_dim)
-    self.read_strengths.bias.data.fill_(1)
 
     self.allocation_strengths = nn.Linear(input_dim, self.strengths_dim)
-    self.allocation_strengths.bias.data.fill_(1)
 
     self.read_mask = nn.Linear(input_dim, num_reads * memory_dim)
-    self.read_mask.bias.data.fill_(1)
     self.write_mask = nn.Linear(input_dim, num_writes * memory_dim)
-    self.write_mask.bias.data.fill_(1)
 
-    self.backward_strengths = nn.Linear(input_dim, num_writes * num_reads * self.strengths_dim)
-    self.backward_strengths.bias.data.fill_(1)
-    self.forward_strengths = nn.Linear(input_dim, num_writes * num_reads * self.strengths_dim)
-    self.forward_strengths.bias.data.fill_(1)
+    self.mode_strengths = nn.Linear(input_dim, num_writes * num_reads * self.strengths_dim)
 
     self.gates = {'write_gate': None,
                   'free_gate': None,
@@ -231,10 +223,8 @@ class Memory(nn.Module):
     write_mask = torch.sigmoid(self.write_mask(inputs))
     write_mask = write_mask.view(-1, self.num_writes, self.memory_dim)
 
-    backward_strengths = self.backward_strengths(inputs)
-    backward_strengths = backward_strengths.view(-1, self.num_writes, self.num_reads, self.strengths_dim)
-    forward_strengths = self.forward_strengths(inputs)
-    forward_strengths = forward_strengths.view(-1, self.num_writes, self.num_reads, self.strengths_dim)
+    mode_strengths = self.mode_strengths(inputs)
+    mode_strengths = mode_strengths.view(-1, self.num_writes, self.num_reads, self.strengths_dim)
 
     result = {'read_content_keys': read_keys,
               'read_content_strengths': read_strengths,
@@ -249,8 +239,7 @@ class Memory(nn.Module):
               'allocation_strengths': allocation_strengths,
               'write_mask': write_mask,
               'read_mask': read_mask,
-              'backward_strengths': backward_strengths,
-              'forward_strengths': forward_strengths}
+              'mode_strengths': mode_strengths}
     
     self.gates = {'write_gate': write_gate,
                   'free_gate': free_gate,
@@ -283,9 +272,9 @@ class Memory(nn.Module):
                                                      inputs['read_mask'])
 
     backward_weights = self.linkage.directional_read_weights(self.read_weights, forward=False,
-                                                             strengths=inputs['backward_strengths'])
+                                                             strengths=inputs['mode_strengths'])
     forward_weights = self.linkage.directional_read_weights(self.read_weights, forward=True,
-                                                            strengths=inputs['forward_strengths'])
+                                                            strengths=inputs['mode_strengths'])
 
     backward_mode = inputs['read_mode'][..., :self.num_writes]
     forward_mode = inputs['read_mode'][..., self.num_writes:2*self.num_writes]
@@ -306,7 +295,6 @@ class Memory(nn.Module):
     full_reset = phi.unsqueeze(-1) * reset_gate
 
     add_matrix = torch.matmul(self.write_weights.transpose(-1, -2), write_vectors)
-
     self.memories = full_reset * self.memories + add_matrix
 
   def forward(self, inputs):

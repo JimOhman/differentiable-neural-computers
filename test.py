@@ -59,7 +59,7 @@ def update_figure(inputs, targets, outputs, mask, images, memory_state, args):
   images['input and target'].set_data(input_and_target)
 
   outputs = torch.stack(outputs, dim=1)
-  if not args.ignore_mask:
+  if args.use_mask and not args.ignore_mask:
     outputs *= mask[0]
   if args.round:
     outputs = outputs.round()
@@ -82,13 +82,14 @@ def visualize_training(args):
     path = os.path.join(args.saves_dir, net)
     state = torch.load(path, map_location=torch.device('cpu'))
     state = insert_args(args, state)
+    state['args'].batch_size = 1
     states.append(state)
 
   controller = Controller(state['args'])
   device = torch.device('cpu')
 
   dataset = make_copy_repeat_dataset(state['args'])
-  loader_params = {'batch_size': args.batch_size,
+  loader_params = {'batch_size': 1,
                    'shuffle': True,
                    'num_workers': 0,
                    'drop_last': True}
@@ -125,7 +126,7 @@ def visualize_training(args):
       animation_params = {'frames': len(states),
                           'interval': args.sleep,
                           'blit': True,
-                          'repeat': True}
+                          'repeat': args.repeat}
       anim = animation.FuncAnimation(fig, animate, **animation_params)
       plt.show()
 
@@ -156,6 +157,8 @@ def insert_args(args, state):
   state['args'].figsize = args.figsize
   state['args'].data_seed = args.seed
   state['args'].round = args.round
+  assert state['args'].max_pattern_length >= state['args'].min_pattern_length
+  assert state['args'].max_repeats >= state['args'].min_repeats
   return state
 
 
@@ -210,6 +213,8 @@ if __name__ == '__main__':
       help='Specify the figure size.')
   visualize.add_argument('--minimize', action='store_true',
       help='Remove padding for visualization.')
+  visualize.add_argument('--repeat', action='store_true',
+      help='Repeat visualization.')
   args = parser.parse_args()
 
   assert args.start_net <= args.end_net

@@ -95,7 +95,7 @@ def make_copy_repeat_dataset(args):
   masks = pad_sequence(masks, batch_first=True)
   return Dataset(inputs, targets, masks)
 
-def make_dirs(args):
+def make_dirs(args, worker_id=None):
   dirs = {}
   if not args.run_tag:
     tz = pytz.timezone(args.time_zone)
@@ -106,10 +106,17 @@ def make_dirs(args):
     base_path = os.path.join('runs', args.run_tag)
   dirs['base'] = base_path
   dirs['saves'] = os.path.join(base_path, 'saves')
-  dirs['tensorboard'] = os.path.join(base_path, 'tensorboard')
   dirs['config'] = os.path.join(base_path, 'config')
+
+  if worker_id is not None:
+    dirs['worker_saves'] = os.path.join(dirs['saves'], str(worker_id))
+    dirs['tensorboard'] = os.path.join(base_path, 'tensorboard', str(worker_id))
+  else:
+    dirs['worker_saves'] = dirs['saves']
+    dirs['tensorboard'] = os.path.join(base_path, 'tensorboard')
+
   os.makedirs(dirs['tensorboard'], exist_ok=True)
-  os.makedirs(dirs['saves'], exist_ok=True)
+  os.makedirs(dirs['worker_saves'], exist_ok=True)
   os.makedirs(dirs['config'], exist_ok=True)
   path = os.path.join(dirs['config'], 'config.json')
   if not os.path.isfile(path):
@@ -175,4 +182,8 @@ class AutoClip():
     self.grad_history.append(grad_norm)
     clip_value = np.percentile(self.grad_history, self.clip_percentile)
     torch.nn.utils.clip_grad_norm_(model.parameters(), clip_value) 
+
+  def state_dict(self):
+    state_dict = {'grad_history': self.grad_history}
+    return state_dict
 
