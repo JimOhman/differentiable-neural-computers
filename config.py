@@ -72,7 +72,7 @@ def get_args():
       help='Use adaptive gradient clipping (https://github.com/pseeth/autoclip).')
   training.add_argument('--clip_percentile', type=float, default=10,
       help='The clip percentile for --autoclip.')
-  training.add_argument('--mask_weight', type=float, default=0,
+  training.add_argument('--use_mask_weight', type=float, default=0,
       help='Weight to loss for masked targets.')
 
   pbt_training = parser.add_argument_group('population based training')

@@ -8,28 +8,26 @@ import os
 
 
 def unroll_through_time(controller, loss_function, inputs, targets, mask, args):
-  outputs = []
-  loss, accuracy = 0, 0
-  time_steps = inputs.shape[1]
-  for t in range(time_steps):
-    x = inputs[:, t, :]
-    y = targets[:, t, :]
-    output = controller(x)
-    outputs.append(output)
-    _loss = loss_function(output, y).mean(-1)
-    _accuracy = get_accuracy(output, y)
-    if args.use_mask:
-      _loss *= mask[:, t]
-      _accuracy *= mask[:, t]
-    elif args.mask_weight:
-      _loss *= (mask[:, t] + args.mask_weight).clamp(0, 1)
-    loss += _loss
-    accuracy += _accuracy
+  inputs = inputs.transpose(0, 1)
+  targets = targets.transpose(0, 1)
+  mask = mask.transpose(0, 1)
+
+  outputs = controller(inputs)
+  loss = loss_function(outputs, targets).mean(-1)
+  accuracy = get_accuracy(outputs, targets)
+
+  time_steps = inputs.shape[0]
   if args.use_mask:
-    time_steps = mask.sum(-1)
-  accuracy = accuracy / time_steps
+    loss *= mask
+    accuracy *= mask
+    time_steps = mask.sum(0)
+  elif args.use_mask_weight:
+    loss *= (mask + args.use_mask_weight).clamp(0, 1)
+
+  loss = loss.sum(0)
   if args.time_average_loss:
     loss = loss / time_steps
+  accuracy = accuracy.sum(0) / time_steps
   return outputs, loss.mean(), accuracy.mean()
 
 

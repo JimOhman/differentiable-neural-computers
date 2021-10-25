@@ -194,57 +194,63 @@ class Memory(nn.Module):
 
   def _read_inputs(self, inputs):
     write_vectors = self.write_vectors(inputs)
-    write_vectors = write_vectors.view(-1, self.num_writes, self.memory_dim)
+    write_vectors = write_vectors.view(-1, self.batch_size, self.num_writes, self.memory_dim)
 
     erase_vectors = torch.sigmoid(self.erase_vectors(inputs))
-    erase_vectors = erase_vectors.view(-1, self.num_writes, self.memory_dim)
+    erase_vectors = erase_vectors.view(-1, self.batch_size, self.num_writes, self.memory_dim)
 
     free_gate = torch.sigmoid(self.free_gate(inputs))
+    free_gate = free_gate.view(-1, self.batch_size, self.num_reads)
+
     allocation_gate = torch.sigmoid(self.allocation_gate(inputs))
+    allocation_gate = allocation_gate.view(-1, self.batch_size, self.num_writes)
+
     write_gate = torch.sigmoid(self.write_gate(inputs))
+    write_gate = write_gate.view(-1, self.batch_size, self.num_writes)
 
     read_mode = self.read_mode(inputs)
-    read_mode = self.softmax(read_mode.view(-1, self.num_reads, self.num_read_modes))
+    read_mode = self.softmax(read_mode.view(-1, self.batch_size, self.num_reads, self.num_read_modes))
 
     write_keys = self.write_keys(inputs)
-    write_keys = write_keys.view(-1, self.num_writes, self.memory_dim)
+    write_keys = write_keys.view(-1, self.batch_size, self.num_writes, self.memory_dim)
     write_strengths = self.write_strengths(inputs)
-    write_strengths = write_strengths.view(-1, self.num_writes, self.strengths_dim)
+    write_strengths = write_strengths.view(-1, self.batch_size, self.num_writes, self.strengths_dim)
 
     read_keys = self.read_keys(inputs)
-    read_keys = read_keys.view(-1, self.num_reads, self.memory_dim)
+    read_keys = read_keys.view(-1, self.batch_size, self.num_reads, self.memory_dim)
     read_strengths = self.read_strengths(inputs)
-    read_strengths = read_strengths.view(-1, self.num_reads, self.strengths_dim)
+    read_strengths = read_strengths.view(-1, self.batch_size, self.num_reads, self.strengths_dim)
 
     allocation_strengths = self.allocation_strengths(inputs)
 
     read_mask = torch.sigmoid(self.read_mask(inputs))
-    read_mask = read_mask.view(-1, self.num_reads, self.memory_dim)
+    read_mask = read_mask.view(-1, self.batch_size, self.num_reads, self.memory_dim)
     write_mask = torch.sigmoid(self.write_mask(inputs))
-    write_mask = write_mask.view(-1, self.num_writes, self.memory_dim)
+    write_mask = write_mask.view(-1, self.batch_size, self.num_writes, self.memory_dim)
 
     mode_strengths = self.mode_strengths(inputs)
-    mode_strengths = mode_strengths.view(-1, self.num_writes, self.num_reads, self.strengths_dim)
+    mode_strengths = mode_strengths.view(-1, self.batch_size, self.num_writes, self.num_reads, self.strengths_dim)
 
-    result = {'read_content_keys': read_keys,
-              'read_content_strengths': read_strengths,
-              'write_content_keys': write_keys,
-              'write_content_strengths': write_strengths,
-              'write_vectors': write_vectors,
-              'erase_vectors': erase_vectors,
-              'free_gate': free_gate,
-              'allocation_gate': allocation_gate,
-              'write_gate': write_gate,
-              'read_mode': read_mode,
-              'allocation_strengths': allocation_strengths,
-              'write_mask': write_mask,
-              'read_mask': read_mask,
-              'mode_strengths': mode_strengths}
-    
     self.gates = {'write_gate': write_gate,
                   'free_gate': free_gate,
                   'allocation_gate': allocation_gate}
-    return result
+
+    time_steps = inputs.shape[0]
+    for t in range(time_steps):
+      yield {'read_content_keys': read_keys[t],
+             'read_content_strengths': read_strengths[t],
+             'write_content_keys': write_keys[t],
+             'write_content_strengths': write_strengths[t],
+             'write_vectors': write_vectors[t],
+             'erase_vectors': erase_vectors[t],
+             'free_gate': free_gate[t],
+             'allocation_gate': allocation_gate[t],
+             'write_gate': write_gate[t],
+             'read_mode': read_mode[t],
+             'allocation_strengths': allocation_strengths[t],
+             'write_mask': write_mask[t],
+             'read_mask': read_mask[t],
+             'mode_strengths': mode_strengths[t]}
 
   def update_write_weights(self, inputs):
     write_content_weights = self._write_content_weights_mod(self.memories, 
@@ -299,17 +305,19 @@ class Memory(nn.Module):
 
   def forward(self, inputs):
     inputs = self._read_inputs(inputs)
+    memory_outputs = []
+    for input_ in inputs:
+      phi = self.freeness.update(self.write_weights, input_['free_gate'], self.read_weights)
+      self.update_write_weights(input_)
 
-    phi = self.freeness.update(self.write_weights, inputs['free_gate'], self.read_weights)
-    self.update_write_weights(inputs)
+      self._erase_and_write(input_['erase_vectors'], input_['write_vectors'], phi)
 
-    self._erase_and_write(inputs['erase_vectors'], inputs['write_vectors'], phi)
+      self.linkage.update(self.write_weights)
+      self.update_read_weights(input_)
 
-    self.linkage.update(self.write_weights)
-    self.update_read_weights(inputs)
-
-    memory_output = torch.matmul(self.read_weights, self.memories)
-    return memory_output
+      memory_output = torch.matmul(self.read_weights, self.memories)
+      memory_outputs.append(memory_output)
+    return torch.stack(memory_outputs, dim=0)
 
 
 class Controller(nn.Module):
@@ -326,11 +334,14 @@ class Controller(nn.Module):
                          args.num_writes,
                          args.free_strengths)
 
-    self.fc = nn.Linear(args.num_reads*args.memory_dim, args.output_dim)
-
+    self.fc_input_dim = args.num_reads * args.memory_dim
+    self.fc_output_dim = args.output_dim
+    self.fc = nn.Linear(self.fc_input_dim, self.fc_output_dim)
+  
   def forward(self, x):
-    memory_output = self.memory(x).view(self.batch_size, -1)
-    return torch.sigmoid(self.fc(memory_output))
+    memory_outputs = self.memory(x).view(-1, self.fc_input_dim)
+    output = torch.sigmoid(self.fc(memory_outputs))
+    return output.view(-1, self.batch_size, self.fc_output_dim)
 
   def get_weights(self):
     return {key: value.cpu() for key, value in self.state_dict().items()}

@@ -12,15 +12,13 @@ from matplotlib import animation
 
 
 def update_memory_state(controller, memory_state):
-  memory_state['allocation_gate'].append(controller.memory.gates['allocation_gate'][0])
-  memory_state['free_gate'].append(controller.memory.gates['free_gate'][0])
+  memory_state['allocation_gate'].append(controller.memory.gates['allocation_gate'][0, 0])
+  memory_state['free_gate'].append(controller.memory.gates['free_gate'][0, 0])
   memory_state['write_weights'].append(controller.memory.write_weights[0].view(-1))
   memory_state['read_weights'].append(controller.memory.read_weights[0].view(-1))
   return memory_state
 
-def init_visualization(inputs, args):
-  time_steps = inputs.shape[1]
-
+def init_visualization(time_steps, args):
   init = {}
   init['input and target'] = torch.zeros(args.pattern_width, time_steps)
   init['output'] = torch.zeros(args.pattern_width, time_steps)
@@ -55,15 +53,15 @@ def init_visualization(inputs, args):
   return fig, images
 
 def update_figure(inputs, targets, outputs, mask, images, memory_state, args):
-  input_and_target = 0.5*inputs[0].T + targets[0].T
+  input_and_target = 0.5*inputs[:, 0].T + targets[:, 0].T
   images['input and target'].set_data(input_and_target)
 
-  outputs = torch.stack(outputs, dim=1)
+  outputs = torch.cat(outputs)
   if args.use_mask and not args.ignore_mask:
-    outputs *= mask[0]
+    outputs *= mask
   if args.round:
     outputs = outputs.round()
-  images['output'].set_data(outputs)
+  images['output'].set_data(outputs.T)
 
   allocation_gate = torch.stack(memory_state['allocation_gate'], dim=1)
   free_gate = torch.stack(memory_state['free_gate'], dim=1)
@@ -98,15 +96,20 @@ def visualize_training(args):
   with torch.inference_mode():
     batch_idx = 0
     for inputs, targets, mask in dataset:
+      inputs = inputs.transpose(0, 1)
+      targets = targets.transpose(0, 1)
+      mask = mask.transpose(0, 1)
       if args.minimize:
-        _, time_steps = torch.nonzero(mask, as_tuple=True)
+        time_steps, _ = torch.nonzero(mask, as_tuple=True)
         time_steps = time_steps.max().item()
 
-        inputs = inputs[:, :time_steps]
-        targets = targets[:, :time_steps]
-        mask = mask[:, :time_steps]
+        inputs = inputs[:time_steps, :]
+        targets = targets[:time_steps, :]
+        mask = mask[:time_steps, :]
+      else:
+        time_steps = inputs.shape[0]
 
-      fig, images = init_visualization(inputs, state['args'])
+      fig, images = init_visualization(time_steps, state['args'])
 
       def animate(i):
         state = states[i]
@@ -114,9 +117,9 @@ def visualize_training(args):
 
         outputs = []
         memory_state = defaultdict(list)
-        for t in range(inputs.shape[1]):
-          output = controller(inputs[:, t]).squeeze(0)
-          outputs.append(output)
+        for t in range(time_steps):
+          output = controller(inputs[t, :])
+          outputs.append(output.squeeze(1))
           memory_state = update_memory_state(controller, memory_state)
 
         update_figure(inputs, targets, outputs, mask, images, memory_state, state['args'])
@@ -155,7 +158,8 @@ def insert_args(args, state):
   state['args'].visualize = args.visualize
   state['args'].sleep = args.sleep
   state['args'].figsize = args.figsize
-  state['args'].data_seed = args.seed
+  if args.seed:
+    state['args'].data_seed = args.seed
   state['args'].round = args.round
   assert state['args'].max_pattern_length >= state['args'].min_pattern_length
   assert state['args'].max_repeats >= state['args'].min_repeats
@@ -255,7 +259,7 @@ if __name__ == '__main__':
         loss = loss.cpu().item()
         accuracy = accuracy.cpu().item()
         
-        print('loss: {}, accuracy: {}%'.format(round(loss, 4), round(accuracy, 1)))
+        print('loss: {}, accuracy: {}%'.format(round(loss, 10), round(accuracy, 1)))
   else:
     visualize_training(args)
 
