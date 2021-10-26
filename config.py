@@ -86,6 +86,8 @@ def get_args():
       help='Exploit only the current best individuals.')
   pbt_training.add_argument('--perturbs', nargs=2, type=float, default=[0.9, 1.1],
       help='Perturbation factors for exploration.')
+  pbt_training.add_argument('--max_deviation', type=float, default=0.,
+      help='Percentage of allowed deviation before forced exploit and explore.')
 
   logging = parser.add_argument_group('logging')
   logging.add_argument('--group_tag', type=str, default='',

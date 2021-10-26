@@ -41,6 +41,8 @@ class PBTTrainer(Trainer):
     population_size = ray.get(population.get_size.remote())
     self.opponent_ids = [i for i in range(population_size) if i != worker_id]
 
+    self.best_fitness = -np.inf
+
     Trainer.__init__(self, dataset, args, seed, worker_id)
 
   def train(self):
@@ -53,9 +55,14 @@ class PBTTrainer(Trainer):
         fitness = -loss
         self.population.set_fitness.remote(self.worker_id, fitness, self.training_step)
 
-        self.logger.add_scalar('loss/lr', self.args.lr, self.num_epochs)
-        if self.num_epochs % self.args.pbt_frequency == 0:
-          self._exploit_and_explore()
+        force_pbt = False
+        if fitness > self.best_fitness:
+          self.best_fitness = fitness
+        elif (self.best_fitness / fitness) < self.args.max_deviation:
+          force_pbt = True
+
+        if self.num_epochs % self.args.pbt_frequency == 0 or force_pbt:
+          self._exploit_and_explore(force_pbt)
 
         pbar.set_description('id: {}, lr: {}, loss: {}, acc: {}%'.format(self.worker_id,
                                                                          round(self.args.lr, 4),
@@ -63,13 +70,17 @@ class PBTTrainer(Trainer):
                                                                          round(accuracy, 1)))
         pbar.update(steps)
 
-  def _exploit_and_explore(self):
-    winner_state = self._binary_tournament()
+  def _exploit_and_explore(self, force):
+    winner_state = self._binary_tournament(force)
     if winner_state is not None:
       perturbed_winner_state = self._explore(winner_state)
       self.load_state(perturbed_winner_state)
 
-  def _binary_tournament(self):
+      new_step = perturbed_winner_state['training_step']
+      self.logger.add_scalar('fitness/lr', self.args.lr, self.num_epochs)
+      self.logger.add_scalar('fitness/step', new_step, self.num_epochs)
+
+  def _binary_tournament(self, force=False):
     fitnesses = ray.get(self.population.get_fitness.remote())
     
     worker_fitness, worker_steps = fitnesses[self.worker_id]
@@ -78,13 +89,12 @@ class PBTTrainer(Trainer):
     opponent_id = np.random.choice(self.opponent_ids)
     opponent_fitness, opponent_steps = fitnesses[opponent_id]
 
-    if worker_fitness > opponent_fitness:
+    if (worker_fitness > opponent_fitness) and not force:
       return None
 
     folder_path = os.path.join(self.dirs['saves'], str(opponent_id))
     state_path = os.path.join(folder_path, str(opponent_steps))
-    winner_state = torch.load(state_path)
-    return winner_state
+    return torch.load(state_path)
 
   def _explore(self, state):
     perturb = np.random.choice(self.args.perturbs)
